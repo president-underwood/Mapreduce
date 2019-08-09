@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// Shutdown is an RPC method that shuts down the Master's RPC server.
+
 func (mr *Master) Shutdown(_, _ *struct{}) error {
 	debug("Shutdown: registration server\n")
 	close(mr.shutdown)
@@ -16,20 +16,16 @@ func (mr *Master) Shutdown(_, _ *struct{}) error {
 	return nil
 }
 
-// startRPCServer staarts the Master's RPC server. It continues accepting RPC
-// calls (Register in particular) for as long as the worker is alive.
 func (mr *Master) startRPCServer() {
 	rpcs := rpc.NewServer()
 	rpcs.Register(mr)
-	os.Remove(mr.address) // only needed for "unix"
+	os.Remove(mr.address)
 	l, e := net.Listen("unix", mr.address)
 	if e != nil {
 		log.Fatal("RegstrationServer", mr.address, " error: ", e)
 	}
 	mr.l = l
 
-	// now that we are listening on the master address, can fork off
-	// accepting connections to another thread.
 	go func() {
 	loop:
 		for {
@@ -51,10 +47,9 @@ func (mr *Master) startRPCServer() {
 		debug("RegistrationServer: done\n")
 	}()
 }
+//停止master的RPC服务
+//避免RPC之间发生竞争条件
 
-// stopRPCServer stops the master RPC server.
-// This must be done through an RPC to avoid race conditions between the RPC
-// server thread and the current thread.
 func (mr *Master) stopRPCServer() {
 	var reply ShutdownReply
 	ok := call(mr.address, "Master.Shutdown", new(struct{}), &reply)
