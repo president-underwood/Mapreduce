@@ -8,8 +8,7 @@ import (
 	"os"
 	"sync"
 )
-
-// Worker holds the state for a server waiting for DoTask or Shutdown RPCs
+// workers hold this state waithing for the dotasks or shutdown the rpc
 type Worker struct {
 	sync.Mutex
 
@@ -19,14 +18,17 @@ type Worker struct {
 	nRPC   int // 通过互斥锁保护
 	nTasks int // 需要处理的任务总数,通过互斥锁保护
 	l      net.Listener
+	con_current int //同时分配的任务数,通过互斥锁保护
+	parallelism *Parallelism
 }
 
-// DoTask is called by the master when a new task is being scheduled on this
+
 // worker.
 func (wk *Worker) DoTask(arg *DoTaskArgs, _ *struct{}) error {
 	fmt.Printf("%s: given %v task #%d on file %s (nios: %d)\n",
 		wk.name, arg.Phase, arg.TaskNumber, arg.File, arg.NumOtherPhase)
-
+	wk.Lock()
+	wk.nTask=-1
 	switch arg.Phase {
 	case mapPhase:
 		doMap(arg.JobName, arg.TaskNumber, arg.File, arg.NumOtherPhase, wk.Map)
