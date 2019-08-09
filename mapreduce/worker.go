@@ -8,6 +8,11 @@ import (
 	"os"
 	"sync"
 )
+type Parallelism struct {
+	mu  sync.Mutex
+	now int32
+	max int32
+}//判断做相同任务的worker
 // workers hold this state waithing for the dotasks or shutdown the rpc
 type Worker struct {
 	sync.Mutex
