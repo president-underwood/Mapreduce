@@ -21,10 +21,10 @@ type Worker struct {
 	Map    func(string, string) []KeyValue
 	Reduce func(string, []string) string
 	nRPC   int // 通过互斥锁保护
-	nTasks int // 需要处理的任务总数,通过互斥锁保护
+	nTask int // 需要处理的任务总数,通过互斥锁保护
 	l      net.Listener
 	con_current int //同时分配的任务数,通过互斥锁保护
-	parallelism *Parallelism
+	parallelism *Similarity
 }
 
 
@@ -34,6 +34,32 @@ func (wk *Worker) DoTask(arg *DoTaskArgs, _ *struct{}) error {
 		wk.name, arg.Phase, arg.TaskNumber, arg.File, arg.NumOtherPhase)
 	wk.Lock()
 	wk.nTask=-1
+	wk.con_current += 1
+	nc := wk.con_current
+	wk.Unlock()
+
+	if nc > 1 {
+		//当前分配的工作＞1
+		log.Fatal("Worker.DoTask: more than one DoTask sent concurrently to a single worker\n")
+	}
+
+	pause := false
+	if wk.parallelism != nil {
+		wk.parallelism.mu.Lock()
+		wk.parallelism.now += 1
+		if wk.parallelism.now > wk.parallelism.max {
+			wk.parallelism.max = wk.parallelism.now
+		}
+		if wk.parallelism.max < 2 {
+			pause = true
+		}
+		wk.parallelism.mu.Unlock()
+	}
+
+	if pause {
+		//让其他workder完成这个
+		time.Sleep(time.Second)
+	}
 	switch arg.Phase {
 	case mapPhase:
 		doMap(arg.JobName, arg.TaskNumber, arg.File, arg.NumOtherPhase, wk.Map)
@@ -45,19 +71,19 @@ func (wk *Worker) DoTask(arg *DoTaskArgs, _ *struct{}) error {
 	return nil
 }
 
-// Shutdown is called by the master when all work has been completed.
-// We should respond with the number of tasks we have processed.
+// Master调用shutdown当所有工作都完成了
+// worker给Master进行回复
 func (wk *Worker) Shutdown(_ *struct{}, res *ShutdownReply) error {
 	debug("Shutdown %s\n", wk.name)
 	wk.Lock()
 	defer wk.Unlock()
-	res.Ntasks = wk.nTasks
+	res.Ntasks = wk.nTask
 	wk.nRPC = 1
-	wk.nTasks-- // Don't count the shutdown RPC
+	wk.nTask--
 	return nil
 }
 
-// Tell the master we exist and ready to work
+// 在控制台注册自己身份并且表明可以工作
 func (wk *Worker) register(master string) {
 	args := new(RegisterArgs)
 	args.Worker = wk.name
@@ -82,7 +108,7 @@ func RunWorker(MasterAddress string, me string,
 	wk.nRPC = nRPC
 	rpcs := rpc.NewServer()
 	rpcs.Register(wk)
-	os.Remove(me) // only needed for "unix"
+	os.Remove(me)
 	l, e := net.Listen("unix", me)
 	if e != nil {
 		log.Fatal("RunWorker: worker ", me, " error: ", e)
@@ -105,7 +131,7 @@ func RunWorker(MasterAddress string, me string,
 			wk.Unlock()
 			go rpcs.ServeConn(conn)
 			wk.Lock()
-			wk.nTasks++
+			wk.nTask++
 			wk.Unlock()
 		} else {
 			break
