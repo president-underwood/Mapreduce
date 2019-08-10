@@ -8,63 +8,50 @@ import (
 	"sort"
 )
 
-// doReduce does the job of a reduce worker: it reads the intermediate
-// key/value pairs (produced by the map phase) for this task, sorts the
-// intermediate key/value pairs by key, calls the user-defined reduce function
-// (reduceF) for each key, and writes the output to disk.
+
 func doReduce(
-	jobName string, // the name of the whole MapReduce job
-	reduceTaskNumber int, // which reduce task this is
-	nMap int, // the number of map tasks that were run ("M" in the paper)
+	jobName string, // 整个作业的名字
+	reduceTaskNumber int, // 名字
+	nMap int, //map发生的数量
 	reduceF func(key string, values []string) string,
 ) {
-	//read kv slice from the json file
-	keyValues := make(map[string][]string)
+	inputFiles := make([] *os.File, nMap)
+	for i := 0; i < nMap; i++ {
+		fileName := reduceName(jobName, i, reduceTask)
+		inputFiles[i], _ = os.Open(fileName)
+	}
 
-	i := 0
-	for i < nMap {
-		fileName := reduceName(jobName, i, reduceTaskNumber)
-
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		enc := json.NewDecoder(file)
+	// 收集key/value 键值对
+	KeyValues := make(map[string][]string)
+	for _, inputFile := range inputFiles {
+		defer inputFile.Close()
+		dec := json.NewDecoder(inputFile)
 		for {
 			var kv KeyValue
-			err := enc.Decode(&kv)
+			err := dec.Decode(&kv)
 			if err != nil {
 				break
 			}
-			_, ok := keyValues[kv.Key]
-			if !ok {
-				keyValues[kv.Key] = make([]string, 0)
-			}
-			keyValues[kv.Key] = append(keyValues[kv.Key], kv.Value)
+			KeyValues[kv.Key] = append(KeyValues[kv.Key], kv.Value)
 		}
-		i++
 	}
-
-	var keys []string
-	for k := range keyValues {
+	keys := make([]string, 0, len(KeyValues))
+	for k := range KeyValues {
 		keys = append(keys, k)
 	}
-
-
 	sort.Strings(keys)
-
-	file, err := os.Create(mergeName(jobName, reduceTaskNumber))
+	
+	//输出文件
+	out, err := os.Create(outFile)
 	if err != nil {
-		fmt.Printf("reduce merge file:%s can't open\n", mergeName(jobName, reduceTaskNumber))
-		return
+		log.Fatal("Error in creating file", outFile)
 	}
-	enc := json.NewEncoder(file)
+	defer out.Close()
 
-	for _, k := range keys {
-		enc.Encode(KeyValue{k, reduceF(k, keyValues[k])})
+	enc := json.NewEncoder(out)
+	for _, key := range keys {
+		kv := KeyValue{key, reduceF(key, KeyValues[key])}
+		enc.Encode(kv)
 	}
-	file.Close()
-
 }
 
