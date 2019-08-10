@@ -1,5 +1,5 @@
 package mapreduce
-
+//教学自带文件
 import (
 	"fmt"
 	"strconv"
