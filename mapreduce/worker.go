@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 )
-type Parallelism struct {
+type Similarity struct {
 	mu  sync.Mutex
 	now int32
 	max int32
