@@ -1,22 +1,6 @@
 package main
 
-//
-// pbservice client application
-//
-// export GOPATH=~/6.824
-// go build viewd.go
-// go build pbd.go
-// go build pbc.go
-// ./viewd /tmp/rtm-v &
-// ./pbd /tmp/rtm-v /tmp/rtm-1 &
-// ./pbd /tmp/rtm-v /tmp/rtm-2 &
-// ./pbc /tmp/rtm-v key1 value1
-// ./pbc /tmp/rtm-v key1
-//
-// change "rtm" to your user name.
-// start the pbd programs in separate windows and kill
-// and restart them to exercise fault tolerance.
-//
+
 
 import "pbservice"
 import "os"
