@@ -77,31 +77,24 @@ func Sequential(jobName string, files []string, nreduce int,
 	return
 }
 
-// Distributed schedules map and reduce tasks on workers that register with the
-// master over RPC.
-
 // 分布式执行任务
 func Distributed(jobName string, files []string, nreduce int, master string) (mr *Master) {
 	mr = newMaster(master)
 	mr.startRPCServer()
-	go mr.run(jobName, files, nreduce, mr.schedule, func() {
-		mr.stats = mr.killWorkers()
+	go mr.run(jobName, files, nreduce,
+		func(phase jobPhase) {
+			ch := make(chan string)
+			go mr.forwardRegistrations(ch)
+			schedule(mr.jobName, mr.files, mr.nReduce, phase, ch)
+		},
+	func(){
+		mr.stats = mr.killWorkers()//停止workers
 		mr.stopRPCServer()
-	})
+		})
 	return
 }
 
-// run executes a mapreduce job on the given number of mappers and reducers.
-//
-// First, it divides up the input file among the given number of mappers, and
-// schedules each task on workers as they become available. Each map task bins
-// its output in a number of bins equal to the given number of reduce tasks.
-// Once all the mappers have finished, workers are assigned reduce tasks.
-//
-// When all tasks have been completed, the reducer outputs are merged,
-// statistics are collected, and the master is shut down.
-//
-// Note that this implementation assumes a shared file system.
+
 func (mr *Master) run(jobName string, files []string, nreduce int,
 	schedule func(phase jobPhase),
 	finish func(),
@@ -122,15 +115,12 @@ func (mr *Master) run(jobName string, files []string, nreduce int,
 	mr.doneChannel <- true
 }
 
-// Wait blocks until the currently scheduled work has completed.
-// This happens when all tasks have scheduled and completed, the final output
-// have been computed, and all workers have been shut down.
+//阻塞直到全部任务完成.
 func (mr *Master) Wait() {
 	<-mr.doneChannel
 }
 
-// killWorkers cleans up all workers by sending each one a Shutdown RPC.
-// It also collects and returns the number of tasks each worker has performed.
+//两个功能 一kill所有的worker 二收集所有worker反馈的信息
 func (mr *Master) killWorkers() []int {
 	mr.Lock()
 	defer mr.Unlock()
