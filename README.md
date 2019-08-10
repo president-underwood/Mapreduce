@@ -1,4 +1,1 @@
-# Mapreduce
-搭建一个基于单机的简易mapreduce框架
-使用RPC和channel，工作线程模拟分布式环境
-进行wordcount工作
+
