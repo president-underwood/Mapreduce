@@ -6,10 +6,6 @@ import (
 	"sync"
 )
 
-// Master holds all the state that the master needs to keep track of. Of
-// particular importance is registerChannel, the channel that notifies the
-// master of workers that have gone idle and are in need of new work.
-
 
 type Master struct {
 	sync.Mutex
@@ -17,12 +13,12 @@ type Master struct {
 	address         string
 	registerChannel chan string
 	doneChannel     chan bool
-	workers         []string // protected by the mutex
+	workers         []string //通过线程锁保护
 
-	// Per-task information
-	jobName string   // Name of currently executing job
-	files   []string // Input files
-	nReduce int      // Number of reduce partitions
+	//单个任务的信息
+	jobName string   //当前需要执行的任务名字
+	files   []string //Input文件
+	nReduce int      //分隔区数量
 
 	shutdown chan struct{}
 	l        net.Listener
